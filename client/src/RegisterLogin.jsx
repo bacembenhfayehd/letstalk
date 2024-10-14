@@ -3,20 +3,19 @@ import axios from "axios";
 import { UserContext } from "./Usercontext";
 
 
-export default function Register() {
+export default function RegisterLogin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const[loggingOrregister,setLoggingOrRegister] = useState('register')
   const {setUsername:setLoggedinUsername,setId} = useContext(UserContext)
 
   async function register(ev) {
     ev.preventDefault();
-    try {
-      const {data} = await axios.post("/register", { username, password });
+    const url = loggingOrregister === 'register' ? 'http://localhost:4040/register' : 'http://localhost:4040/login'
+      const {data} = await axios.post(url, { username, password });
       setLoggedinUsername(username);
       setId(data.id)
-    } catch (error) {
-      console.error(error);
-    }
+   
   }
 
   return (
@@ -37,8 +36,23 @@ export default function Register() {
           placeholder="password"
         />
         <button className="bg-blue-500 text-white w-full block rounded-sm p-2">
-          Register
+          {loggingOrregister === 'register' ? 'Register' : 'Login'}
         </button>
+        <div className="mt-2 text-center">
+          {loggingOrregister === 'register' && (
+            <div>
+              Already a member?
+             <button onClick={() => setLoggingOrRegister('login')}>Login here</button>
+              </div>
+          )}
+          {loggingOrregister === 'login' && (
+            <div>
+              Dont have an acoount?
+             <button onClick={() => setLoggingOrRegister('register')} >Register</button>
+             
+              </div>
+          )}
+         </div>
       </form>
     </div>
   );

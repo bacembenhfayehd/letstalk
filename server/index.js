@@ -39,6 +39,26 @@ app.get('/profile', (req,res) => {
     }
   });
 
+
+  app.post('/logout', (req,res) => {
+    res.cookie('token', '', {sameSite:'none', secure:true}).json('ok');
+  });
+
+  app.post('/login', async (req,res) => {
+    const {username, password} = req.body;
+    const checkUser = await User.findOne({username});
+    if (checkUser) {
+      const checkPassword = bcrypt.compareSync(password, checkUser.password);
+      if (checkPassword) {
+        jwt.sign({userId:checkUser._id,username}, secret, {}, (err, token) => {
+          res.cookie('token', token, {sameSite:'none', secure:true}).json({
+            id: checkUser._id,
+          });
+        });
+      }
+    }
+  });
+
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
     console.log('Received data:', { username, password });  
