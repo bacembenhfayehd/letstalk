@@ -7,10 +7,15 @@ const cors = require('cors')
 const User = require('./Models/User')
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
+const ws = require('ws')
+const http = require('http');
+
+
 
 
 
 const app = express();
+const server = http.createServer(app);
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
@@ -84,9 +89,43 @@ app.post('/register', async (req, res) => {
 
 connect(process.env.MONGO)
     .then(() => {
-        app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+        server.listen(PORT, () => console.log(`Server started on port ${PORT}`));
         console.log('Connected to MongoDB successfully!');
     })
     .catch(error => {
         console.error('Error connecting to MongoDB:', error);
     });
+
+
+    const wss = new ws.WebSocketServer({server}) ;
+    wss.on('connection' , (connection , req) => {
+      
+      const cookies = req.headers.cookie;
+      if(cookies){
+      const tokenString = cookies.split(';').find(str => str.trim().startsWith('token='))
+      if(tokenString){
+        const token = tokenString.split('=')[1]
+        jwt.verify(token,secret, {} ,(error , userData) => {
+          if(error) throw error;
+          const {userId , username} = userData;
+          connection.userId = userId;
+          connection.username = username;
+
+        })
+      }
+        
+      }
+
+      //console.log([...wss.clients].length)
+      //console.log([...wss.clients].map(c => c.username))
+
+      [...wss.clients].forEach(client => {
+        client.send(JSON.stringify({
+          online: [...wss.clients].map(c => ({userId:c.userId, username:c.username}))
+        }))
+      })
+    })
+
+  
+  
+  
