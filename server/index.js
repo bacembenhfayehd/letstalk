@@ -4,7 +4,8 @@ const {connect} =require('mongoose'); // !
 require('dotenv').config(); // !
 const jwt = require('jsonwebtoken')
 const cors = require('cors')
-const User = require('./Models/User')
+const User = require('./Models/User');
+const Message = require('./Models/Message')
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const ws = require('ws')
@@ -31,6 +32,34 @@ const bcryptSalt = bcrypt.genSaltSync(10);
 app.get('/test', (req,res) => {
     res.json('test ok');
   });
+
+  async function getUserDataFromRequest(req) {
+    return new Promise((resolve, reject) => {
+      const token = req.cookies?.token;
+      if (token) {
+        jwt.verify(token, secret, {}, (err, userData) => {
+          if (err) throw err;
+          resolve(userData);
+        });
+      } else {
+        reject('no token');
+      }
+    });
+  
+  }
+
+app.get('/msjs/:userId' , async (req,res) => {
+  const {userId} = req.params;
+  const userData = await getUserDataFromRequest(req);
+  const ourUserId = userData.userId;
+  console.log(userId,userData)
+  const messages = await Message.find({
+    sender:{$in:[userId,ourUserId]},
+    destinataire:{$in:[userId,ourUserId]},
+  }).sort({createdAt: 1});
+  res.json(messages);
+
+})
 
 app.get('/profile', (req,res) => {
     const token = req.cookies?.token;
@@ -113,12 +142,29 @@ connect(process.env.MONGO)
 
         })
       }
+
+      connection.on('message' , async (message) => {
+        const messageData = JSON.parse(message.toString());
+        const {destinataire,messageEnvoyee} = messageData;
+        //console.log(messageEnvoyee);
+        if(destinataire,messageEnvoyee){
+          const messageDoc = await Message.create({
+            sender:connection.userId,
+            destinataire,
+            messageEnvoyee,  
+
+          });
+          [...wss.clients].filter(c => c.userId === destinataire).forEach(c => c.send(JSON.stringify({messageEnvoyee,sender:connection.userId,destinataire,id:messageDoc._id})))
+        }
+      })
         
       }
 
+
+      
       //console.log([...wss.clients].length)
       //console.log([...wss.clients].map(c => c.username))
-
+// notify when someone connect
       [...wss.clients].forEach(client => {
         client.send(JSON.stringify({
           online: [...wss.clients].map(c => ({userId:c.userId, username:c.username}))
