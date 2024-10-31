@@ -4,12 +4,14 @@ import Logo from "./Logo";
 import { UserContext } from "./Usercontext";
 import {uniqBy} from 'lodash'
 import axios from "axios";
+import Users from "./Users";
 
 export default function Chat() {
   const [ws, setWs] = useState(null);
   const [onlineusers, setOnlineUsers] = useState({});
+  const [onfflineusers, setOfflineUsers] = useState({});
   const [selectedUser, setSelectedUser] = useState(null);
-  const { id, username } = useContext(UserContext);
+  const { id, username , setId,setUsername } = useContext(UserContext);
   const [newmessage,setNewMessage] = useState('');
   const [messages,setNewMessages] = useState([]);
   const underMsjs = useRef();
@@ -56,7 +58,7 @@ export default function Chat() {
   const onlinePeopleExceptMe = { ...onlineusers };
   delete onlinePeopleExceptMe[id];
 
-  const messagesWithoutRepaeat = uniqBy(messages,'id')
+  const messagesWithoutRepaeat = uniqBy(messages,'_id')
 
   const senMessage = (ev) => {
     ev.preventDefault();
@@ -71,7 +73,7 @@ export default function Chat() {
     setNewMessages(prev => ([...prev ,{messageEnvoyee:newmessage, isOur:true,
       sender:id,
       destinataire:selectedUser,
-      id:Date.now()  //random id to get all messages
+      _id:Date.now()  //random id to get all messages
     }]))
   }
 
@@ -89,36 +91,68 @@ useEffect(() => {
 useEffect(() => {
   if(selectedUser){
     axios.get('/msjs/' + selectedUser)
+    .then(res => {
+      setNewMessages(res.data);
+    })
   }
 },[selectedUser])
 
+
+useEffect(() => {
+  axios.get('/users')
+  .then(res => {
+    const offlineUsersTab = res.data.filter(p => p._id !== id).filter(p => !Object.keys(onlineusers).includes(p._id))
+    const offlineUsersObject = {};
+    offlineUsersTab.forEach(p => {
+      offlineUsersObject[p._id] = p;
+    })
+    setOfflineUsers(offlineUsersObject);
+    //console.log({offlineUsersTab,offlineUsersObject});
+  })
+
+},[onlineusers])
+
+function logout(){
+  axios.post('/logout')
+  .then(() => {
+    setWs(null);
+    setId(null);
+    setUsername(null);
+
+  })
+}
+
   return (
     <div className="flex h-screen">
-      <div className="bg-white w-1/3  ">
+      <div className="bg-white w-1/3 flex flex-col  ">
+        <div className="flex-grow">
         <Logo />
 
-        {Object.keys(onlinePeopleExceptMe).map((userId) => (
-          <div
-            key={userId}
-            onClick={() => setSelectedUser(userId)}
-            className={
-              "border-b border-gray-100  flex items-center gap-2 " +
-              (userId === selectedUser ? "bg-blue-100" : "" )
-            } > 
-
-            {userId === selectedUser && (
-              <div className="bg-blue-500 h-12 w-1"></div>
-            )}
-            
-            <div className=" flex items-center py-2 pl-4 gap-2">
-            <Avatar username={onlineusers[userId]} userId={userId} />
-            <span className="text-gray-700 cursor-pointer">
-              {onlineusers[userId]}
-            </span>
-            </div>
-            
-          </div>
-        ))}
+{Object.keys(onlinePeopleExceptMe).map((userId) => (
+  <Users  key={userId}
+  id={userId}
+  online={true}
+  username={onlinePeopleExceptMe[userId]}
+  onClick={() => {setSelectedUser(userId);console.log({userId})}}
+  selected={userId === selectedUser} />
+))}
+{Object.keys(onfflineusers).map((userId) => (
+  <Users  key={userId}
+  id={userId}
+  online={false}
+  username={onfflineusers[userId].username}
+  onClick={() => {setSelectedUser(userId);console.log({userId})}}
+  selected={userId === selectedUser} />
+))}
+        </div>
+        <div className="p-2 text-center flex items-center justify-center">
+          <span className="text-sm mr-2 text-gray-600 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+          </svg>
+            {username}</span>
+          <button onClick={logout} className="text-gray-700 text-sm bg-blue-300 px-2 py-1 border rounded-sm">logout</button>
+        </div>
       </div>
       <div className=" flex flex-col bg-blue-300 w-2/3 p-2">
         <div className="flex-grow">{!selectedUser && (
@@ -130,12 +164,10 @@ useEffect(() => {
         {!!selectedUser && (
           <div className="relative h-full">
           <div className="overflow-y-scroll absolute top-0 left-0 right-0 bottom-2">
-            {messagesWithoutRepaeat.map((message,index) => (
-              <div className={(message.sender === id ? 'text-right' : 'text-left')}>
-              <div key={index} className={" text-left inline-block p-2 my-2 rounded-sm text-sm " +(message.sender === id ? 'bg-blue-500 text-white' : 'bg-white text-gray-700')}>
-                sender : {message.sender}<br/>
-                my id :{id}<br/>
-                message: {message.messageEnvoyee}
+            {messagesWithoutRepaeat.map((message) => (
+              <div key={message._id} className={(message.sender === id ? 'text-right' : 'text-left')}>
+              <div className={" text-left inline-block p-2 my-2 rounded-sm text-sm " +(message.sender === id ? 'bg-blue-500 text-white' : 'bg-white text-gray-700')}>
+              {message.messageEnvoyee}
               </div>
               </div>
              
