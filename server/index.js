@@ -10,6 +10,8 @@ const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const ws = require('ws')
 const http = require('http');
+const fs = require('fs');
+
 
 
 
@@ -17,6 +19,11 @@ const http = require('http');
 
 const app = express();
 const server = http.createServer(app);
+app.use('/uploads', express.static(__dirname + '/uploads'));
+const uploadsDir = __dirname + '/uploads';
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
@@ -132,16 +139,13 @@ connect(process.env.MONGO)
     });
 
 
-    const wss = new ws.WebSocketServer({server}) ;
-    wss.on('connection' , (connection , req) => {
-
-       //console.log([...wss.clients].length)
-      //console.log([...wss.clients].map(c => c.username))
-
+    const wss = new ws.WebSocketServer({ server });
+    wss.on('connection', (connection, req) => {
+     
       function notifyAboutOnlinePeople() {
         [...wss.clients].forEach(client => {
           client.send(JSON.stringify({
-            online: [...wss.clients].map(c => ({userId:c.userId,username:c.username})),
+            online: [...wss.clients].map(c => ({ userId: c.userId, username: c.username })),
           }));
         });
       }
@@ -165,42 +169,66 @@ connect(process.env.MONGO)
     
       
       const cookies = req.headers.cookie;
-      if(cookies){
-      const tokenString = cookies.split(';').find(str => str.trim().startsWith('token='))
-      if(tokenString){
-        const token = tokenString.split('=')[1]
-        jwt.verify(token,secret, {} ,(error , userData) => {
-          if(error) throw error;
-          const {userId , username} = userData;
-          connection.userId = userId;
-          connection.username = username;
-
-        })
-      }
-
-      connection.on('message' , async (message) => {
-        const messageData = JSON.parse(message.toString());
-        const {destinataire,messageEnvoyee} = messageData;
-        //console.log(messageEnvoyee);
-        if(destinataire,messageEnvoyee){
-          const messageDoc = await Message.create({
-            sender:connection.userId,
-            destinataire,
-            messageEnvoyee,  
-
+      if (cookies) {
+        const tokenString = cookies.split(';').find(str => str.trim().startsWith('token='));
+        if (tokenString) {
+          const token = tokenString.split('=')[1];
+          jwt.verify(token, secret, {}, (error, userData) => {
+            if (error) throw error;
+            const { userId, username } = userData;
+            connection.userId = userId;
+            connection.username = username;
           });
-          [...wss.clients].filter(c => c.userId === destinataire).forEach(c => c.send(JSON.stringify({messageEnvoyee,sender:connection.userId,destinataire,_id:messageDoc._id})))
         }
-      })
-        
       }
-
-
+    
+      connection.on('message', async (message) => {
+        const messageData = JSON.parse(message.toString());
+        const { destinataire, messageEnvoyee, file } = messageData;
       
-     
-
-     notifyAboutOnlinePeople();
-    })
+        let filename = null;
+      
+        if (file) {
+          console.log('size', file.data.length);
+          const parts = file.name.split('.');
+          const ext = parts[parts.length - 1];
+          filename = Date.now() + '.' + ext;
+          const path = __dirname + '/uploads/' + filename;
+          const bufferData = Buffer.from(file.data.split(',')[1], 'base64');
+    
+          fs.writeFile(path, bufferData, (err) => {
+            if (err) {
+              console.error('error on saving file', err);
+            } else {
+              console.log('file saved', path);
+            }
+          });
+        }
+    
+        if (destinataire && (messageEnvoyee || file)) {
+          const messageDoc = await Message.create({
+            sender: connection.userId,
+            destinataire,
+            messageEnvoyee,
+            file: file ? filename : null
+          });
+          
+          [...wss.clients]
+            .filter(c => c.userId === destinataire)
+            .forEach(c => c.send(JSON.stringify({
+              messageEnvoyee,
+              sender: connection.userId,
+              destinataire,
+              file: file ? filename : null,
+              _id: messageDoc._id
+            })));
+        }
+      });
+    
+      // Notify all users online
+      notifyAboutOnlinePeople();
+    });
+    
 
   
   

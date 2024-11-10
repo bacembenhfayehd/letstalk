@@ -3,7 +3,8 @@ const mongoose = require('mongoose')
 const messageSchema = new mongoose.Schema({
     sender:{type:mongoose.Schema.Types.ObjectId,ref:'User'},
     destinataire:{type:mongoose.Schema.Types.ObjectId,ref:'User'},
-    messageEnvoyee:String
+    messageEnvoyee:String,
+    file:String
 },{timestamps:true});
 
 const MessageModel =  mongoose.model('Message',messageSchema);
